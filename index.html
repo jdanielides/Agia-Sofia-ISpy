@@ -184,11 +184,13 @@ wrap.addEventListener('click', function(e) {
         const fc = found[obj.id].filter(Boolean).length;
         if (found[obj.id].every(Boolean)) showToast('Found all ' + obj.label + (obj.count > 1 ? 's' : '') + '! \u2705');
         else showToast('Found a ' + obj.label + '! (' + fc + '/' + obj.count + ')');
+        if (obj.id === 'smiley') soundSmiley(); else if (obj.id === 'alien') soundAlien(); else if (obj.id === 'tooth') soundTooth(); else if (obj.id === 'omega') soundOmega(); else if (obj.id === 'vr') soundVR(); else soundFound();
         hit = true;
         if (totalFound === totalItems) {
           finished = true;
           clearInterval(timerInterval);
           setTimeout(function() {
+            soundWin();
             winScreen.classList.add('show');
             winDetail.textContent = 'Time: ' + fmt(Date.now() - startTime) + (hintsLeft < 3 ? '  \u00b7  Hints used: ' + (3 - hintsLeft) : '  \u00b7  No hints \u2014 impressive!');
           }, 700);
@@ -198,7 +200,7 @@ wrap.addEventListener('click', function(e) {
     }
     if (hit) break;
   }
-  if (!hit) addOverlay(rx, ry, 'wrong');
+  if (!hit) { addOverlay(rx, ry, 'wrong'); soundWrong(); }
 });
 
 hintBtn.addEventListener('click', function() {
@@ -245,7 +247,190 @@ window.addEventListener('resize', function() {
   });
 });
 
+const AudioCtx = window.AudioContext || window.webkitAudioContext;
+let actx = null;
+function getCtx() { if (!actx) actx = new AudioCtx(); return actx; }
+
+function playNote(freq, type, duration, vol, delay, endFreq) {
+  const ctx = getCtx();
+  const osc = ctx.createOscillator();
+  const gain = ctx.createGain();
+  osc.connect(gain); gain.connect(ctx.destination);
+  osc.type = type;
+  osc.frequency.setValueAtTime(freq, ctx.currentTime + delay);
+  if (endFreq) osc.frequency.exponentialRampToValueAtTime(endFreq, ctx.currentTime + delay + duration);
+  gain.gain.setValueAtTime(0.001, ctx.currentTime + delay);
+  gain.gain.linearRampToValueAtTime(vol, ctx.currentTime + delay + 0.015);
+  gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + delay + duration);
+  osc.start(ctx.currentTime + delay);
+  osc.stop(ctx.currentTime + delay + duration + 0.05);
+}
+
+function playDrum(freq, duration, vol, delay) {
+  const ctx = getCtx();
+  const osc = ctx.createOscillator();
+  const gain = ctx.createGain();
+  osc.connect(gain); gain.connect(ctx.destination);
+  osc.type = 'sine';
+  osc.frequency.setValueAtTime(freq, ctx.currentTime + delay);
+  osc.frequency.exponentialRampToValueAtTime(freq * 0.2, ctx.currentTime + delay + duration);
+  gain.gain.setValueAtTime(vol, ctx.currentTime + delay);
+  gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + delay + duration);
+  osc.start(ctx.currentTime + delay);
+  osc.stop(ctx.currentTime + delay + duration + 0.05);
+}
+
+function soundFound() {
+  // Bouncy xylophone arpeggio shooting upward!
+  [523, 659, 784, 1047, 1319].forEach(function(f, i) {
+    playNote(f, 'triangle', 0.2, 0.45, i * 0.065);
+    playNote(f * 2, 'sine', 0.1, 0.12, i * 0.065);
+  });
+  playDrum(200, 0.12, 0.5, 0);
+  playDrum(200, 0.12, 0.35, 0.13);
+}
+
+function soundSmiley() {
+  // Giggling wobbly happy tune with little bounces
+  [392, 523, 659, 784, 659, 784, 1047, 1319].forEach(function(f, i) {
+    playNote(f, 'triangle', 0.14, 0.4, i * 0.08, f * 1.07);
+    if (i % 2 === 0) playDrum(220, 0.08, 0.25, i * 0.08);
+  });
+  playNote(1568, 'sine', 0.35, 0.3, 0.7, 2093);
+}
+
+function soundWrong() {
+  // Silly springy boing — not scary, just goofy
+  playNote(500, 'sine', 0.12, 0.3, 0, 180);
+  playNote(350, 'triangle', 0.12, 0.25, 0.1, 200);
+  playNote(250, 'sine', 0.18, 0.2, 0.2, 160);
+}
+
+function soundWin() {
+  // Big party fanfare with drums and sparkles!
+  [523,659,784,659,784,1047,784,1047,1319,1047,1319,1568,1319,1568,2093].forEach(function(f, i) {
+    playNote(f, 'triangle', 0.2, 0.38, i * 0.09, f * 1.003);
+    playNote(f / 2, 'sine', 0.2, 0.15, i * 0.09);
+  });
+  [0, 0.18, 0.36, 0.54, 0.72, 0.9, 1.08, 1.26].forEach(function(t) {
+    playDrum(160, 0.15, 0.55, t);
+  });
+  // Sparkle cascade at the end
+  [2093, 2637, 3136, 2637, 3136, 4186].forEach(function(f, i) {
+    playNote(f, 'sine', 0.25, 0.22, 1.1 + i * 0.1, f * 0.6);
+  });
+}
+
+function soundAlien() {
+  // Wobbly sci-fi zap with warbling — funny & weird!
+  const ctx = getCtx();
+  [0, 0.18, 0.36].forEach(function(delay) {
+    const osc = ctx.createOscillator();
+    const lfo = ctx.createOscillator();
+    const lfoGain = ctx.createGain();
+    const gain = ctx.createGain();
+    lfo.connect(lfoGain); lfoGain.connect(osc.frequency);
+    osc.connect(gain); gain.connect(ctx.destination);
+    osc.type = 'sawtooth';
+    lfo.type = 'sine';
+    lfo.frequency.setValueAtTime(8 + delay * 20, ctx.currentTime + delay);
+    lfoGain.gain.setValueAtTime(180, ctx.currentTime + delay);
+    osc.frequency.setValueAtTime(800 - delay * 200, ctx.currentTime + delay);
+    osc.frequency.exponentialRampToValueAtTime(200 + delay * 100, ctx.currentTime + delay + 0.35);
+    gain.gain.setValueAtTime(0.001, ctx.currentTime + delay);
+    gain.gain.linearRampToValueAtTime(0.28, ctx.currentTime + delay + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + delay + 0.35);
+    lfo.start(ctx.currentTime + delay); lfo.stop(ctx.currentTime + delay + 0.4);
+    osc.start(ctx.currentTime + delay); osc.stop(ctx.currentTime + delay + 0.4);
+  });
+  // Funny high blip at the end
+  playNote(2000, 'sine', 0.15, 0.3, 0.6, 400);
+  playNote(1200, 'triangle', 0.1, 0.2, 0.72, 2400);
+}
+
+function soundTooth() {
+  // Short dentist drill buzz...then a cheerful "all clear!" ding!
+  const ctx = getCtx();
+  const drill = ctx.createOscillator();
+  const drillGain = ctx.createGain();
+  drill.connect(drillGain); drillGain.connect(ctx.destination);
+  drill.type = 'sawtooth';
+  drill.frequency.setValueAtTime(3200, ctx.currentTime);
+  drill.frequency.setValueAtTime(3400, ctx.currentTime + 0.05);
+  drill.frequency.setValueAtTime(3100, ctx.currentTime + 0.1);
+  drill.frequency.setValueAtTime(3300, ctx.currentTime + 0.15);
+  drillGain.gain.setValueAtTime(0.001, ctx.currentTime);
+  drillGain.gain.linearRampToValueAtTime(0.18, ctx.currentTime + 0.02);
+  drillGain.gain.setValueAtTime(0.18, ctx.currentTime + 0.28);
+  drillGain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.38);
+  drill.start(ctx.currentTime);
+  drill.stop(ctx.currentTime + 0.4);
+  // Happy "no cavities!" ding sequence
+  [1047, 1319, 1568, 2093].forEach(function(f, i) {
+    playNote(f, 'triangle', 0.2, 0.35, 0.42 + i * 0.1, f * 1.002);
+  });
+}
+
+function soundVR() {
+  // Dreamy spatial illusion — swooshing portals and ethereal shimmer
+  const ctx = getCtx();
+  // Swooshing portal whoosh
+  [0, 0.25, 0.5].forEach(function(delay) {
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain); gain.connect(ctx.destination);
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(200 + delay * 300, ctx.currentTime + delay);
+    osc.frequency.exponentialRampToValueAtTime(1800 - delay * 200, ctx.currentTime + delay + 0.4);
+    osc.frequency.exponentialRampToValueAtTime(400 + delay * 100, ctx.currentTime + delay + 0.7);
+    gain.gain.setValueAtTime(0.001, ctx.currentTime + delay);
+    gain.gain.linearRampToValueAtTime(0.22, ctx.currentTime + delay + 0.1);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + delay + 0.7);
+    osc.start(ctx.currentTime + delay); osc.stop(ctx.currentTime + delay + 0.75);
+  });
+  // Ethereal high shimmer layers
+  [1200, 1600, 2000, 2400, 1800].forEach(function(f, i) {
+    playNote(f, 'sine', 0.4, 0.1, 0.1 + i * 0.12, f % 2 === 0 ? f * 0.75 : f * 1.3);
+  });
+  // Deep spatial rumble underneath
+  playNote(60, 'sine', 0.9, 0.18, 0, 45);
+  playNote(80, 'sine', 0.7, 0.12, 0.1, 55);
+  // Final dreamy resolution ping
+  playNote(880, 'triangle', 0.5, 0.2, 0.75, 440);
+  playNote(1320, 'sine', 0.4, 0.15, 0.85, 660);
+}
+function soundOmega() {
+  // Deep resonant bass BOOM — powerful and rumbly
+  const ctx = getCtx();
+  // Big low sub boom
+  [55, 65, 80].forEach(function(freq, i) {
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain); gain.connect(ctx.destination);
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(freq, ctx.currentTime + i * 0.03);
+    osc.frequency.exponentialRampToValueAtTime(freq * 0.4, ctx.currentTime + i * 0.03 + 0.6);
+    gain.gain.setValueAtTime(0.001, ctx.currentTime + i * 0.03);
+    gain.gain.linearRampToValueAtTime(0.45, ctx.currentTime + i * 0.03 + 0.03);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + i * 0.03 + 0.7);
+    osc.start(ctx.currentTime + i * 0.03);
+    osc.stop(ctx.currentTime + i * 0.03 + 0.75);
+  });
+  // Deep growly sawtooth layer
+  playNote(55, 'sawtooth', 0.4, 0.12, 0, 40);
+  // Low melodic resolution — deep and satisfying
+  [110, 138, 165].forEach(function(f, i) {
+    playNote(f, 'triangle', 0.35, 0.2, 0.15 + i * 0.15, f * 0.9);
+  });
+}
+
+document.addEventListener('click', function initAudio() {
+  getCtx();
+  document.removeEventListener('click', initAudio);
+}, { once: true });
+
 buildChecklist();
+scoreEl.textContent = 'Found: 0 / ' + totalItems;
 </script>
 </body>
 </html>
